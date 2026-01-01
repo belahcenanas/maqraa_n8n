@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Users, UserPlus, BarChart2 } from 'lucide-react';
 
 export default function Layout() {
     return (
@@ -16,6 +16,14 @@ export default function Layout() {
                 >
                     <LayoutDashboard size={24} />
                     <span>Dashboard</span>
+                </NavLink>
+
+                <NavLink
+                    to="/stats"
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                >
+                    <BarChart2 size={24} />
+                    <span>Stats</span>
                 </NavLink>
 
                 <NavLink

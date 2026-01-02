@@ -12,11 +12,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export interface MyRecord {
     id: number;
     created_at: string;
-    name: string | null;
-    duration: string | null; // "minutes"
-    tel: string | null;
-    time: string | null; // ISO string 2025-12-31T00:39:42.911Z
-    day: string | null;
+    duration_minutes: number | null;
+    telephone: string | null;
+    time_sent: string | null;
+    session_day: string | null;
+    session_date: string | null; // date as string 'YYYY-MM-DD'
+    message_text: string | null;
+    ai_explanation: string | null;
+    day_sent: string | null;
 }
 
 export interface TelName {

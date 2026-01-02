@@ -105,8 +105,8 @@ export default function Stats() {
 
     // Calculate stats per student
     const studentStats = students.map(student => {
-        const studentRecords = periodRecords.filter(r => r.tel === student.tel);
-        const totalDuration = studentRecords.reduce((acc, curr) => acc + (parseInt(curr.duration || '0') || 0), 0);
+        const studentRecords = periodRecords.filter(r => r.telephone === student.tel);
+        const totalDuration = studentRecords.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
         const sessionsCount = studentRecords.length;
         const missedSessions = Math.max(0, expectedSessions - sessionsCount);
         const completionRate = expectedSessions > 0 ? Math.round((sessionsCount / expectedSessions) * 100) : 100;

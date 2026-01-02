@@ -83,33 +83,34 @@ export default function Dashboard() {
 
     // Filter records for selected date (for daily view)
     const selectedDateRecords = records.filter(r => {
-        const recordDate = format(new Date(r.created_at), 'yyyy-MM-dd');
+        // Use session_date if available, otherwise fall back to created_at
+        const recordDate = r.session_date || format(new Date(r.created_at), 'yyyy-MM-dd');
         return recordDate === selectedDate;
     });
 
     // Create daily student activity list
     const dailyStudentActivity = students.map(student => {
-        const studentRecord = selectedDateRecords.find(r => r.tel === student.tel);
-        const durationMinutes = studentRecord ? parseInt(studentRecord.duration || '0') || 0 : 0;
+        const studentRecord = selectedDateRecords.find(r => r.telephone === student.tel);
+        const durationMinutes = studentRecord?.duration_minutes || 0;
         
         return {
             ...student,
             hasRecord: !!studentRecord,
-            time: studentRecord?.time || null,
+            time: studentRecord?.time_sent || null,
             durationMinutes,
             durationFormatted: formatDuration(durationMinutes)
         };
     });
 
     // Calculate Total Duration
-    const totalDuration = records.reduce((acc, curr) => acc + (parseInt(curr.duration || '0') || 0), 0);
+    const totalDuration = records.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
 
     // Calculate Completion per Student
     const studentStats = students.map(student => {
-        const studentRecords = currentWeekRecords.filter(r => r.tel === student.tel);
-        const submittedDays = new Set(studentRecords.map(r => r.day).filter(Boolean));
+        const studentRecords = currentWeekRecords.filter(r => r.telephone === student.tel);
+        const submittedDays = new Set(studentRecords.map(r => r.session_day || r.day_sent).filter(Boolean));
         const missingDays = REQUIRED_DAYS.filter(day => !submittedDays.has(day));
-        const weekDuration = studentRecords.reduce((acc, curr) => acc + (parseInt(curr.duration || '0') || 0), 0);
+        const weekDuration = studentRecords.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
 
         return {
             ...student,

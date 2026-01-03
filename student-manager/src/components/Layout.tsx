@@ -1,9 +1,29 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, UserPlus, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart2, Moon, Sun, FileText } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function Layout() {
+    const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'dark';
+        setTheme(savedTheme);
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    }, []);
+
+    const toggleTheme = () => {
+        const newTheme = theme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        document.documentElement.setAttribute('data-theme', newTheme);
+    };
+
     return (
         <div className="container">
+            <button className="theme-toggle" onClick={toggleTheme}>
+                {theme === 'dark' ? <Sun size={24} color="var(--primary)" /> : <Moon size={24} color="var(--primary)" />}
+            </button>
+            
             <div className="page-content">
                 <Outlet />
             </div>
@@ -27,19 +47,19 @@ export default function Layout() {
                 </NavLink>
 
                 <NavLink
+                    to="/records"
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                >
+                    <FileText size={24} />
+                    <span>Records</span>
+                </NavLink>
+
+                <NavLink
                     to="/students"
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                 >
                     <Users size={24} />
                     <span>Students</span>
-                </NavLink>
-
-                <NavLink
-                    to="/add"
-                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                >
-                    <UserPlus size={24} />
-                    <span>Add New</span>
                 </NavLink>
             </nav>
         </div>

@@ -90,7 +90,7 @@ export default function WhatsappView() {
         return colors[Math.abs(hash) % colors.length];
     };
 
-    // Handle record click to edit
+    // Handle record click to editb
     const handleRecordClick = (record: MyRecord) => {
         setEditingRecord(record);
         setEditSessionDate(record.session_date || '');

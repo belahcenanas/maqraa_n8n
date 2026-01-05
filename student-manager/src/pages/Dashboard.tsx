@@ -406,13 +406,6 @@ export default function Dashboard() {
     const dailyAbsences = absences.filter(a => a.absence_date === selectedDate);
     const totalAbsencesToday = dailyAbsences.length;
 
-    // Calculate total absences for the week
-    const weekAbsences = absences.filter(a => {
-        const absenceDate = parseISO(a.absence_date);
-        return absenceDate >= weekStart && absenceDate <= weekEnd;
-    });
-    const totalAbsencesThisWeek = weekAbsences.length;
-
     // Chart Data: Duration per Student for selected date (Top 7)
     const dailyLeaderboard = students.map(student => {
         const studentDayRecords = selectedDateRecords.filter(r => r.whatsapp_id_student === student.whatsapp_id_student);

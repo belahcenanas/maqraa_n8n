@@ -29,6 +29,7 @@ export interface Student {
     created_at: string;
     whatsapp_id_student: string | null;
     name: string | null;
+    name_arabic: string | null;
     group_id: number | null;
     color: string | null;
 }
@@ -38,6 +39,14 @@ export interface Group {
     created_at: string;
     name: string;
     description: string | null;
+}
+
+export interface StudentAbsence {
+    id: number;
+    created_at: string;
+    whatsapp_id_student: string;
+    absence_date: string; // date as string 'YYYY-MM-DD'
+    notes: string | null;
 }
 
 // Alias for backward compatibility

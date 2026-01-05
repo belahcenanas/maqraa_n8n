@@ -12,7 +12,7 @@ export default function StudentList() {
     const [modalType, setModalType] = useState<ModalType>(null);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
     const [editingGroup, setEditingGroup] = useState<Group | null>(null);
-    const [studentForm, setStudentForm] = useState({ name: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
+    const [studentForm, setStudentForm] = useState({ name: '', name_arabic: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
     const [groupForm, setGroupForm] = useState({ name: '', description: '' });
     const [showGroups, setShowGroups] = useState(false);
 
@@ -40,6 +40,7 @@ export default function StudentList() {
 
         const dataToSave = {
             name: studentForm.name,
+            name_arabic: studentForm.name_arabic || null,
             whatsapp_id_student: studentForm.whatsapp_id_student,
             group_id: studentForm.group_id ? parseInt(studentForm.group_id) : null,
             color: studentForm.color || '#6366f1'
@@ -68,7 +69,7 @@ export default function StudentList() {
 
         setModalType(null);
         setEditingStudent(null);
-        setStudentForm({ name: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
+        setStudentForm({ name: '', name_arabic: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
         fetchData();
     }
 
@@ -144,7 +145,7 @@ export default function StudentList() {
 
     function openAddStudentModal() {
         setEditingStudent(null);
-        setStudentForm({ name: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
+        setStudentForm({ name: '', name_arabic: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
         setModalType('student');
     }
 
@@ -152,6 +153,7 @@ export default function StudentList() {
         setEditingStudent(student);
         setStudentForm({
             name: student.name || '',
+            name_arabic: student.name_arabic || '',
             whatsapp_id_student: student.whatsapp_id_student || '',
             group_id: student.group_id?.toString() || '',
             color: student.color || '#6366f1'
@@ -250,6 +252,17 @@ export default function StudentList() {
                                             <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '4px' }}>
                                                 {student.name || 'Unknown Name'}
                                             </div>
+                                            {student.name_arabic && (
+                                                <div style={{ 
+                                                    fontSize: '14px', 
+                                                    color: 'var(--text)', 
+                                                    marginBottom: '4px',
+                                                    direction: 'rtl',
+                                                    textAlign: 'right'
+                                                }}>
+                                                    {student.name_arabic}
+                                                </div>
+                                            )}
                                             <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                                                 {student.whatsapp_id_student || 'No WhatsApp ID'}
                                             </div>
@@ -404,6 +417,21 @@ export default function StudentList() {
                                     value={studentForm.name}
                                     onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
                                     placeholder="Student name"
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>
+                                    Name (Arabic)
+                                </label>
+                                <input
+                                    type="text"
+                                    className="input-field"
+                                    value={studentForm.name_arabic}
+                                    onChange={(e) => setStudentForm({ ...studentForm, name_arabic: e.target.value })}
+                                    placeholder="الاسم بالعربية"
+                                    dir="rtl"
+                                    style={{ textAlign: 'right' }}
                                 />
                             </div>
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { supabase, type MyRecord, type Student } from '../lib/supabase';
+import { supabase, type MyRecord, type Student, type StudentAbsence } from '../lib/supabase';
 import { startOfWeek, endOfWeek, format, parseISO, addDays, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-import { AlertCircle, CheckCircle, Calendar, User, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Calendar, User, ChevronLeft, ChevronRight, X, UserX, Users } from 'lucide-react';
 
 const REQUIRED_DAYS = ['Monday', 'Tuesday', 'Thursday', 'Friday'];
 
@@ -40,6 +40,7 @@ function formatTime(timeStr: string | null): string {
 export default function Dashboard() {
     const [records, setRecords] = useState<MyRecord[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [absences, setAbsences] = useState<StudentAbsence[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -49,8 +50,9 @@ export default function Dashboard() {
     const [newSessionDate, setNewSessionDate] = useState('');
     const [sortBy, setSortBy] = useState<'name' | 'time' | 'duration' | 'status'>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-    const [filterOption, setFilterOption] = useState<'all' | 'sent' | 'missing'>('all');
-    const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
+    const [filterOption, setFilterOption] = useState<'all' | 'sent' | 'missing' | 'absent' | 'present'>('all');
+    const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+    const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('week');
 
     const ALLOWED_DAYS = ['Monday', 'Tuesday', 'Thursday', 'Friday'];
 
@@ -85,8 +87,16 @@ export default function Dashboard() {
 
             if (recordsError) throw recordsError;
 
+            // Fetch Absences
+            const { data: absencesData, error: absencesError } = await supabase
+                .from('student_absences')
+                .select('*');
+
+            if (absencesError) throw absencesError;
+
             setStudents(studentsData || []);
             setRecords(recordsData || []);
+            setAbsences(absencesData || []);
         } catch (err: unknown) {
             console.error('Error fetching data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -129,10 +139,17 @@ export default function Dashboard() {
         return acc;
     }, [] as MyRecord[]);
 
+    // Check if student is absent on a date
+    const isAbsent = (whatsappId: string | null, date: string): boolean => {
+        if (!whatsappId) return false;
+        return absences.some(a => a.whatsapp_id_student === whatsappId && a.absence_date === date);
+    };
+
     // Create daily student activity list
     const dailyStudentActivity = students.map(student => {
         const studentRecord = selectedDateRecords.find(r => r.whatsapp_id_student === student.whatsapp_id_student);
         const durationMinutes = studentRecord?.duration_minutes || 0;
+        const isStudentAbsent = isAbsent(student.whatsapp_id_student, selectedDate);
 
         return {
             ...student,
@@ -140,16 +157,27 @@ export default function Dashboard() {
             record: studentRecord || null,
             time: studentRecord?.time_sent || null,
             durationMinutes,
-            durationFormatted: formatDuration(durationMinutes)
+            durationFormatted: formatDuration(durationMinutes),
+            isAbsent: isStudentAbsent
         };
     });
+
+    // Calculate counts
+    const totalSent = dailyStudentActivity.filter(s => s.hasRecord).length;
+    const totalMissing = dailyStudentActivity.filter(s => !s.hasRecord).length;
+    const totalAbsentToday = dailyStudentActivity.filter(s => s.isAbsent).length;
+    const totalPresent = dailyStudentActivity.filter(s => !s.isAbsent).length;
 
     // Sort student activity
     const filteredActivity = filterOption === 'all'
         ? dailyStudentActivity
         : filterOption === 'sent'
         ? dailyStudentActivity.filter(s => s.hasRecord)
-        : dailyStudentActivity.filter(s => !s.hasRecord);
+        : filterOption === 'missing'
+        ? dailyStudentActivity.filter(s => !s.hasRecord)
+        : filterOption === 'absent'
+        ? dailyStudentActivity.filter(s => s.isAbsent)
+        : dailyStudentActivity.filter(s => !s.isAbsent); // present
 
     const sortedActivity = [...filteredActivity].sort((a, b) => {
         let comparison = 0;
@@ -259,6 +287,62 @@ export default function Dashboard() {
         return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     };
 
+    // Mark student as absent
+    const markAsAbsent = async (whatsappId: string, date: string) => {
+        try {
+            const { error } = await supabase
+                .from('student_absences')
+                .insert({ whatsapp_id_student: whatsappId, absence_date: date });
+
+            if (error) throw error;
+            fetchData();
+        } catch (err: unknown) {
+            console.error('Error marking absence:', err);
+            alert(err instanceof Error ? err.message : 'Failed to mark absence');
+        }
+    };
+
+    // Remove absence mark
+    const removeAbsence = async (whatsappId: string, date: string) => {
+        try {
+            const { error } = await supabase
+                .from('student_absences')
+                .delete()
+                .eq('whatsapp_id_student', whatsappId)
+                .eq('absence_date', date);
+
+            if (error) throw error;
+            fetchData();
+        } catch (err: unknown) {
+            console.error('Error removing absence:', err);
+            alert(err instanceof Error ? err.message : 'Failed to remove absence');
+        }
+    };
+
+    // Bulk mark absences
+    const bulkMarkAbsent = async () => {
+        if (selectedStudents.size === 0) return;
+
+        try {
+            const absencesToInsert = Array.from(selectedStudents).map(whatsappId => ({
+                whatsapp_id_student: whatsappId,
+                absence_date: selectedDate
+            }));
+
+            const { error } = await supabase
+                .from('student_absences')
+                .insert(absencesToInsert);
+
+            if (error) throw error;
+            
+            setSelectedStudents(new Set());
+            fetchData();
+        } catch (err: unknown) {
+            console.error('Error marking bulk absences:', err);
+            alert(err instanceof Error ? err.message : 'Failed to mark absences');
+        }
+    };
+
     // Calculate Completion per Student
     const studentStats = students.map(student => {
         const studentRecords = currentWeekRecords.filter(r => r.whatsapp_id_student === student.whatsapp_id_student);
@@ -272,16 +356,62 @@ export default function Dashboard() {
         const missingDays = REQUIRED_DAYS.filter(day => !submittedDays.has(day));
         const weekDuration = studentRecords.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
 
+        // Calculate absences for the current week
+        const weekAbsences = absences.filter(a => {
+            const absenceDate = parseISO(a.absence_date);
+            return a.whatsapp_id_student === student.whatsapp_id_student && absenceDate >= weekStart && absenceDate <= weekEnd;
+        });
+
         return {
             ...student,
             weekDuration,
             submittedDays,
             missingDays,
-            completedCount: submittedDays.size
+            completedCount: submittedDays.size,
+            absenceCount: weekAbsences.length
         };
     });
 
     const problematicStudents = studentStats.filter(s => s.missingDays.length > 0);
+
+    // Calculate time period ranges based on selected period
+    let periodStart: Date, periodEnd: Date, periodLabel: string;
+
+    if (timePeriod === 'day') {
+        periodStart = selectedDateObj;
+        periodEnd = selectedDateObj;
+        periodLabel = format(selectedDateObj, 'MMM d, yyyy');
+    } else if (timePeriod === 'week') {
+        periodStart = weekStart;
+        periodEnd = weekEnd;
+        periodLabel = `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
+    } else if (timePeriod === 'month') {
+        periodStart = new Date(selectedDateObj.getFullYear(), selectedDateObj.getMonth(), 1);
+        periodEnd = new Date(selectedDateObj.getFullYear(), selectedDateObj.getMonth() + 1, 0);
+        periodLabel = format(selectedDateObj, 'MMMM yyyy');
+    } else {
+        periodStart = new Date(selectedDateObj.getFullYear(), 0, 1);
+        periodEnd = new Date(selectedDateObj.getFullYear(), 11, 31);
+        periodLabel = format(selectedDateObj, 'yyyy');
+    }
+
+    // Calculate absences for selected period
+    const periodAbsences = absences.filter(a => {
+        const absenceDate = parseISO(a.absence_date);
+        return absenceDate >= periodStart && absenceDate <= periodEnd;
+    });
+    const totalAbsencesPeriod = periodAbsences.length;
+
+    // Calculate total absences for selected date
+    const dailyAbsences = absences.filter(a => a.absence_date === selectedDate);
+    const totalAbsencesToday = dailyAbsences.length;
+
+    // Calculate total absences for the week
+    const weekAbsences = absences.filter(a => {
+        const absenceDate = parseISO(a.absence_date);
+        return absenceDate >= weekStart && absenceDate <= weekEnd;
+    });
+    const totalAbsencesThisWeek = weekAbsences.length;
 
     // Chart Data: Duration per Student for selected date (Top 7)
     const dailyLeaderboard = students.map(student => {
@@ -312,77 +442,167 @@ export default function Dashboard() {
         <div>
             <h1 style={{ fontSize: '28px', marginBottom: '24px' }}>Dashboard</h1>
 
-            {/* Date Selector */}
+            {/* Date Selector & Filters */}
             <div className="glass-panel" style={{ padding: '16px', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <Calendar size={20} color="var(--primary)" />
-                        <label style={{ fontWeight: 500 }}>Select Date:</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Date Navigation Row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Calendar size={20} color="var(--primary)" />
+                            <label style={{ fontWeight: 500 }}>Select Date:</label>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                                onClick={goToPreviousDay}
+                                style={{
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--card-border)',
+                                    background: 'var(--card-bg)',
+                                    color: 'var(--text)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <ChevronLeft size={20} />
+                            </button>
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => handleDateChange(e.target.value)}
+                                style={{
+                                    padding: '8px 12px',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--card-border)',
+                                    background: 'var(--card-bg)',
+                                    color: 'var(--text)',
+                                    fontSize: '14px',
+                                    cursor: 'pointer'
+                                }}
+                            />
+                            <button
+                                onClick={goToNextDay}
+                                style={{
+                                    padding: '8px',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--card-border)',
+                                    background: 'var(--card-bg)',
+                                    color: 'var(--text)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <ChevronRight size={20} />
+                            </button>
+                            <button
+                                onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: selectedDate === format(new Date(), 'yyyy-MM-dd') ? 'var(--primary)' : 'var(--card-bg)',
+                                    color: selectedDate === format(new Date(), 'yyyy-MM-dd') ? 'white' : 'var(--text)',
+                                    cursor: 'pointer',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Today
+                            </button>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button
-                            onClick={goToPreviousDay}
-                            style={{
-                                padding: '8px',
-                                borderRadius: '8px',
-                                border: '1px solid var(--card-border)',
-                                background: 'var(--card-bg)',
-                                color: 'var(--text)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => handleDateChange(e.target.value)}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                border: '1px solid var(--card-border)',
-                                background: 'var(--card-bg)',
-                                color: 'var(--text)',
-                                fontSize: '14px',
-                                cursor: 'pointer'
-                            }}
-                        />
-                        <button
-                            onClick={goToNextDay}
-                            style={{
-                                padding: '8px',
-                                borderRadius: '8px',
-                                border: '1px solid var(--card-border)',
-                                background: 'var(--card-bg)',
-                                color: 'var(--text)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <ChevronRight size={20} />
-                        </button>
-                        <button
-                            onClick={() => setSelectedDate(format(new Date(), 'yyyy-MM-dd'))}
-                            style={{
-                                padding: '8px 16px',
-                                borderRadius: '8px',
-                                border: 'none',
-                                background: selectedDate === format(new Date(), 'yyyy-MM-dd') ? 'var(--primary)' : 'var(--card-bg)',
-                                color: selectedDate === format(new Date(), 'yyyy-MM-dd') ? 'white' : 'var(--text)',
-                                cursor: 'pointer',
-                                fontWeight: 500,
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            Today
-                        </button>
+
+                    {/* Filters Row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <label style={{ fontWeight: 500, color: 'var(--text-muted)' }}>Filters:</label>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                                onClick={() => setFilterOption('all')}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: filterOption === 'all' ? 'none' : '1px solid var(--card-border)',
+                                    background: filterOption === 'all' ? 'var(--primary)' : 'var(--card-bg)',
+                                    color: filterOption === 'all' ? 'white' : 'var(--text)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                All ({dailyStudentActivity.length})
+                            </button>
+                            <button
+                                onClick={() => setFilterOption('sent')}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: filterOption === 'sent' ? 'none' : '1px solid var(--card-border)',
+                                    background: filterOption === 'sent' ? 'var(--success)' : 'var(--card-bg)',
+                                    color: filterOption === 'sent' ? 'white' : 'var(--text)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Sent ({totalSent})
+                            </button>
+                            <button
+                                onClick={() => setFilterOption('missing')}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: filterOption === 'missing' ? 'none' : '1px solid var(--card-border)',
+                                    background: filterOption === 'missing' ? 'var(--danger)' : 'var(--card-bg)',
+                                    color: filterOption === 'missing' ? 'white' : 'var(--text)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Missing ({totalMissing})
+                            </button>
+                            <button
+                                onClick={() => setFilterOption('absent')}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: filterOption === 'absent' ? 'none' : '1px solid var(--card-border)',
+                                    background: filterOption === 'absent' ? '#f59e0b' : 'var(--card-bg)',
+                                    color: filterOption === 'absent' ? 'white' : 'var(--text)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Absent ({totalAbsentToday})
+                            </button>
+                            <button
+                                onClick={() => setFilterOption('present')}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: filterOption === 'present' ? 'none' : '1px solid var(--card-border)',
+                                    background: filterOption === 'present' ? 'var(--primary)' : 'var(--card-bg)',
+                                    color: filterOption === 'present' ? 'white' : 'var(--text)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Present ({totalPresent})
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -394,27 +614,6 @@ export default function Dashboard() {
                         <User size={20} color="var(--primary)" />
                         Student Activity - {format(parseISO(selectedDate), 'EEEE, MMM d, yyyy')}
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-                        <label style={{ fontWeight: 500, color: 'var(--text-muted)' }}>Show:</label>
-                        <select
-                            value={filterOption}
-                            onChange={(e) => setFilterOption(e.target.value as 'all' | 'sent' | 'missing')}
-                            style={{
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                border: '1px solid var(--card-border)',
-                                background: 'var(--card-bg)',
-                                color: 'var(--text)',
-                                fontSize: '14px',
-                                cursor: 'pointer',
-                                fontWeight: 500
-                            }}
-                        >
-                            <option value="all">All ({dailyStudentActivity.length})</option>
-                            <option value="sent">Sent ({dailyStudentActivity.filter(s => s.hasRecord).length})</option>
-                            <option value="missing">Missing ({dailyStudentActivity.filter(s => !s.hasRecord).length})</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
@@ -426,8 +625,10 @@ export default function Dashboard() {
                                         type="checkbox" 
                                         onChange={(e) => {
                                             if (e.target.checked) {
-                                                const missingIds = sortedActivity.filter(s => !s.hasRecord).map(s => s.id);
-                                                setSelectedStudents(new Set(missingIds));
+                                                const allWhatsappIds = sortedActivity
+                                                    .filter(s => s.whatsapp_id_student)
+                                                    .map(s => s.whatsapp_id_student!);
+                                                setSelectedStudents(new Set(allWhatsappIds));
                                             } else {
                                                 setSelectedStudents(new Set());
                                             }
@@ -487,12 +688,15 @@ export default function Dashboard() {
                                 >
                                     Status {sortBy === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
                                 </th>
+                                <th style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                    Action
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             {sortedActivity.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                    <td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                                         No students found
                                     </td>
                                 </tr>
@@ -518,17 +722,17 @@ export default function Dashboard() {
                                         }}
                                     >
                                         <td style={{ textAlign: 'center', padding: '12px 8px' }}>
-                                            {!student.hasRecord && (
+                                            {student.whatsapp_id_student && (
                                                 <input 
                                                     type="checkbox"
-                                                    checked={selectedStudents.has(student.id)}
+                                                    checked={selectedStudents.has(student.whatsapp_id_student)}
                                                     onChange={(e) => {
                                                         e.stopPropagation();
                                                         const newSelected = new Set(selectedStudents);
                                                         if (e.target.checked) {
-                                                            newSelected.add(student.id);
+                                                            newSelected.add(student.whatsapp_id_student!);
                                                         } else {
-                                                            newSelected.delete(student.id);
+                                                            newSelected.delete(student.whatsapp_id_student!);
                                                         }
                                                         setSelectedStudents(newSelected);
                                                     }}
@@ -589,12 +793,99 @@ export default function Dashboard() {
                                                 </span>
                                             )}
                                         </td>
+                                        <td style={{ textAlign: 'center', padding: '12px 8px' }}>
+                                            {student.whatsapp_id_student && (
+                                                isAbsent(student.whatsapp_id_student, selectedDate) ? (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removeAbsence(student.whatsapp_id_student!, selectedDate);
+                                                        }}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid var(--success)',
+                                                            background: 'rgba(34, 197, 94, 0.1)',
+                                                            color: 'var(--success)',
+                                                            cursor: 'pointer',
+                                                            fontSize: '12px',
+                                                            fontWeight: 500,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        <UserX size={14} /> Mark Attending
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            markAsAbsent(student.whatsapp_id_student!, selectedDate);
+                                                        }}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid var(--danger)',
+                                                            background: 'rgba(239, 68, 68, 0.1)',
+                                                            color: 'var(--danger)',
+                                                            cursor: 'pointer',
+                                                            fontSize: '12px',
+                                                            fontWeight: 500,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        <UserX size={14} /> Mark Absent
+                                                    </button>
+                                                )
+                                            )}
+                                        </td>
                                     </tr>
                                 ))
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                {/* Bulk Actions */}
+                {selectedStudents.size > 0 && (
+                    <div style={{
+                        marginTop: '16px',
+                        padding: '12px 16px',
+                        background: 'rgba(99, 102, 241, 0.1)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '12px'
+                    }}>
+                        <span style={{ fontWeight: 500, color: 'var(--primary)' }}>
+                            <Users size={16} style={{ display: 'inline', marginRight: '8px' }} />
+                            {selectedStudents.size} student{selectedStudents.size > 1 ? 's' : ''} selected
+                        </span>
+                        <button
+                            onClick={bulkMarkAbsent}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: 'var(--danger)',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            <UserX size={16} /> Mark All as Absent
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Chart */}
@@ -631,6 +922,164 @@ export default function Dashboard() {
                 </div>
             </div>
 
+            {/* Absence Statistics */}
+            <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                        <UserX color="var(--danger)" size={20} />
+                        Absence Statistics
+                    </h3>
+                    
+                    {/* Time Period Selector */}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={() => setTimePeriod('day')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: timePeriod === 'day' ? 'none' : '1px solid var(--card-border)',
+                                background: timePeriod === 'day' ? 'var(--primary)' : 'var(--card-bg)',
+                                color: timePeriod === 'day' ? 'white' : 'var(--text)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Day
+                        </button>
+                        <button
+                            onClick={() => setTimePeriod('week')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: timePeriod === 'week' ? 'none' : '1px solid var(--card-border)',
+                                background: timePeriod === 'week' ? 'var(--primary)' : 'var(--card-bg)',
+                                color: timePeriod === 'week' ? 'white' : 'var(--text)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Week
+                        </button>
+                        <button
+                            onClick={() => setTimePeriod('month')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: timePeriod === 'month' ? 'none' : '1px solid var(--card-border)',
+                                background: timePeriod === 'month' ? 'var(--primary)' : 'var(--card-bg)',
+                                color: timePeriod === 'month' ? 'white' : 'var(--text)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Month
+                        </button>
+                        <button
+                            onClick={() => setTimePeriod('year')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: timePeriod === 'year' ? 'none' : '1px solid var(--card-border)',
+                                background: timePeriod === 'year' ? 'var(--primary)' : 'var(--card-bg)',
+                                color: timePeriod === 'year' ? 'white' : 'var(--text)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: 500,
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Year
+                        </button>
+                    </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div style={{
+                        padding: '16px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Period Absences</div>
+                        <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--danger)' }}>
+                            {totalAbsencesPeriod}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {periodLabel}
+                        </div>
+                    </div>
+                    
+                    <div style={{
+                        padding: '16px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                    }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Today's Absences</div>
+                        <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--danger)' }}>
+                            {totalAbsencesToday}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {format(parseISO(selectedDate), 'MMM d, yyyy')}
+                        </div>
+                    </div>
+                    
+                    <div style={{
+                        padding: '16px',
+                        background: 'rgba(99, 102, 241, 0.1)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(99, 102, 241, 0.2)'
+                    }}>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Attendance Rate (Today)</div>
+                        <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--primary)' }}>
+                            {students.length > 0 ? Math.round(((students.length - totalAbsencesToday) / students.length) * 100) : 0}%
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {students.length - totalAbsencesToday} / {students.length} present
+                        </div>
+                    </div>
+                </div>
+                
+                {/* List of absent students today */}
+                {dailyAbsences.length > 0 && (
+                    <div style={{ marginTop: '20px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-muted)' }}>
+                            Absent Students Today:
+                        </h4>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {dailyAbsences.map(absence => {
+                                const student = students.find(s => s.whatsapp_id_student === absence.whatsapp_id_student);
+                                return (
+                                    <div
+                                        key={absence.id}
+                                        style={{
+                                            padding: '6px 12px',
+                                            background: 'rgba(239, 68, 68, 0.1)',
+                                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                                            borderRadius: '6px',
+                                            fontSize: '13px',
+                                            color: 'var(--danger)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        <UserX size={14} />
+                                        {student?.name || student?.whatsapp_id_student || 'Unknown'}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Missing Reports */}
             <div>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -649,6 +1098,19 @@ export default function Dashboard() {
                                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                                         Missing: {student.missingDays.join(', ')}
                                     </div>
+                                    {student.absenceCount > 0 && (
+                                        <div style={{ 
+                                            fontSize: '12px', 
+                                            color: 'var(--danger)', 
+                                            marginTop: '4px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px'
+                                        }}>
+                                            <UserX size={12} />
+                                            {student.absenceCount} absence{student.absenceCount > 1 ? 's' : ''} this week
+                                        </div>
+                                    )}
                                 </div>
                                 {/* Could add a 'Remind' button here later */}
                             </div>

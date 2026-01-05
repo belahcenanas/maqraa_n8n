@@ -10,6 +10,13 @@ import {
     isSameDay,
     parseISO,
     subDays,
+    addDays,
+    addWeeks,
+    addMonths,
+    addYears,
+    subWeeks,
+    subMonths,
+    subYears,
     differenceInDays,
     getDay
 } from 'date-fns';
@@ -20,7 +27,7 @@ import {
 import {
     Trophy, AlertTriangle, Clock, TrendingUp,
     Users, Activity, Flame,
-    Download, X, Star, Sunrise, Moon, Zap, User
+    Download, X, Star, Sunrise, Moon, Zap, User, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 type TimePeriod = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -457,13 +464,102 @@ export default function Stats() {
                 )}
 
                 {/* Period selector */}
-                <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+                <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Navigation buttons for non-all periods */}
+                    {period !== 'all' && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    let newDate = selectedDate;
+                                    if (period === 'day') newDate = subDays(selectedDate, 1);
+                                    else if (period === 'week') newDate = subWeeks(selectedDate, 1);
+                                    else if (period === 'month') newDate = subMonths(selectedDate, 1);
+                                    else if (period === 'year') newDate = subYears(selectedDate, 1);
+                                    setSelectedDate(newDate);
+                                }}
+                                style={{
+                                    padding: '6px',
+                                    borderRadius: '6px',
+                                    border: '1px solid var(--card-border)',
+                                    background: 'var(--card-bg)',
+                                    color: 'var(--text)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            
+                            <div style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                background: 'rgba(99, 102, 241, 0.1)',
+                                color: 'var(--primary)',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap'
+                            }}>
+                                {period === 'day' && format(selectedDate, 'MMM d, yyyy')}
+                                {period === 'week' && `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`}
+                                {period === 'month' && format(selectedDate, 'MMMM yyyy')}
+                                {period === 'year' && format(selectedDate, 'yyyy')}
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    let newDate = selectedDate;
+                                    if (period === 'day') newDate = addDays(selectedDate, 1);
+                                    else if (period === 'week') newDate = addWeeks(selectedDate, 1);
+                                    else if (period === 'month') newDate = addMonths(selectedDate, 1);
+                                    else if (period === 'year') newDate = addYears(selectedDate, 1);
+                                    setSelectedDate(newDate);
+                                }}
+                                style={{
+                                    padding: '6px',
+                                    borderRadius: '6px',
+                                    border: '1px solid var(--card-border)',
+                                    background: 'var(--card-bg)',
+                                    color: 'var(--text)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <ChevronRight size={18} />
+                            </button>
+
+                            <button
+                                onClick={() => setSelectedDate(new Date())}
+                                style={{
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    border: '1px solid var(--primary)',
+                                    background: 'rgba(99, 102, 241, 0.1)',
+                                    color: 'var(--primary)',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600
+                                }}
+                            >
+                                Current
+                            </button>
+
+                            <div style={{ width: '1px', height: '24px', background: 'var(--card-border)', margin: '0 8px' }} />
+                        </>
+                    )}
+
+                    {/* Period type buttons */}
                     {(['day', 'week', 'month', 'year', 'all'] as TimePeriod[]).map(p => (
                         <button
                             key={p}
                             onClick={() => {
                                 setPeriod(p);
-                                setSelectedDate(new Date());
+                                if (p !== period) {
+                                    setSelectedDate(new Date());
+                                }
                             }}
                             style={{
                                 padding: '8px 14px',

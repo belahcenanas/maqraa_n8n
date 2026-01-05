@@ -18,7 +18,7 @@ import {
     LineChart, Line, CartesianGrid
 } from 'recharts';
 import {
-    Trophy, AlertTriangle, Clock, Calendar, TrendingUp,
+    Trophy, AlertTriangle, Clock, TrendingUp,
     Users, Activity, Flame,
     Download, X, Star, Sunrise, Moon, Zap, User
 } from 'lucide-react';
@@ -450,7 +450,7 @@ export default function Stats() {
                         >
                             <option value="all">All Students</option>
                             {students.map(s => (
-                                <option key={s.id} value={s.whatsapp_id_student}>{s.name || s.whatsapp_id_student}</option>
+                                <option key={s.id} value={s.whatsapp_id_student || ''}>{s.name || s.whatsapp_id_student || 'Unknown'}</option>
                             ))}
                         </select>
                     </div>
@@ -574,7 +574,7 @@ export default function Stats() {
                                         <Tooltip
                                             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                             contentStyle={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', borderRadius: '12px' }}
-                                            formatter={(value: number) => [`${formatHours(value)}`, 'Study Time']}
+                                            formatter={(value: number | undefined) => [`${formatHours(value || 0)}`, 'Study Time']}
                                         />
                                         <Bar
                                             dataKey="totalDuration"
@@ -636,7 +636,7 @@ export default function Stats() {
                                     <YAxis tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickFormatter={(val) => `${val}h`} />
                                     <Tooltip
                                         contentStyle={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', borderRadius: '12px' }}
-                                        formatter={(value: number, name: string) => [name === 'hours' ? `${value}h` : value, name === 'hours' ? 'Study Time' : 'Reports']}
+                                        formatter={(value: number | undefined, name: string) => [name === 'hours' ? `${value || 0}h` : (value || 0), name === 'hours' ? 'Study Time' : 'Reports']}
                                     />
                                     <Line type="monotone" dataKey="hours" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: 'var(--primary)' }} activeDot={{ r: 6 }} name="hours" />
                                     <Line type="monotone" dataKey="count" stroke="var(--success)" strokeWidth={2} strokeDasharray="5 5" name="Reports" />
@@ -691,7 +691,7 @@ export default function Stats() {
                                                 <tr
                                                     key={s.id}
                                                     style={{ borderBottom: '1px solid var(--card-border)', cursor: 'pointer' }}
-                                                    onClick={() => setSelectedStudentId(s.whatsapp_id_student)}
+                                                    onClick={() => setSelectedStudentId(s.whatsapp_id_student || '')}
                                                 >
                                                     <td style={{ padding: '12px 8px', fontWeight: 500 }}>{s.name}</td>
                                                     <td style={{ textAlign: 'center', padding: '12px 8px', fontWeight: 600, color: 'var(--primary)' }}>{formatHours(s.totalDuration)}</td>

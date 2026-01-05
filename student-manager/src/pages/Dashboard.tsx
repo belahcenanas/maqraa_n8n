@@ -270,7 +270,7 @@ export default function Dashboard() {
         const submittedDays = new Set(
             studentRecords
                 .filter(r => r.session_date) // Only records with valid session_date
-                .map(r => format(parseISO(r.session_date), 'EEEE'))
+                .map(r => format(parseISO(r.session_date!), 'EEEE'))
         );
         const missingDays = REQUIRED_DAYS.filter(day => !submittedDays.has(day));
         const weekDuration = studentRecords.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
@@ -544,7 +544,7 @@ export default function Dashboard() {
                                             fontWeight: 500,
                                             color: !student.hasRecord ? 'var(--danger)' : 'var(--text)'
                                         }}>
-                                            {student.name || student.tel}
+                                            {student.name || student.whatsapp_id_student || 'Unknown'}
                                         </td>
                                         <td style={{
                                             textAlign: 'center',
@@ -617,7 +617,8 @@ export default function Dashboard() {
                             <Tooltip
                                 contentStyle={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', borderRadius: '12px' }}
                                 cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                                formatter={(value: number) => {
+                                formatter={(value: number | undefined) => {
+                                    if (value === undefined) return ['0h 0m', 'Duration'];
                                     const hours = Math.floor(value / 60);
                                     const mins = value % 60;
                                     return [`${hours}h ${mins}m`, 'Duration'];
@@ -647,7 +648,7 @@ export default function Dashboard() {
                         problematicStudents.map(student => (
                             <div key={student.id} className="glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
-                                    <div style={{ fontWeight: 600 }}>{student.name || student.tel}</div>
+                                    <div style={{ fontWeight: 600 }}>{student.name || student.whatsapp_id_student || 'Unknown'}</div>
                                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
                                         Missing: {student.missingDays.join(', ')}
                                     </div>

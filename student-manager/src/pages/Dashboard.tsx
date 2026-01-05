@@ -3,7 +3,7 @@ import { supabase, type MyRecord, type Student } from '../lib/supabase';
 import { startOfWeek, endOfWeek, format, parseISO, addDays, subDays } from 'date-fns';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-import { AlertCircle, Clock, CheckCircle, Calendar, User, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Calendar, User, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 const REQUIRED_DAYS = ['Monday', 'Tuesday', 'Thursday', 'Friday'];
 
@@ -258,9 +258,6 @@ export default function Dashboard() {
     const isMobile = () => {
         return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     };
-
-    // Calculate Total Duration
-    const totalDuration = records.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
 
     // Calculate Completion per Student
     const studentStats = students.map(student => {

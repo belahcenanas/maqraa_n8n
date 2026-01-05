@@ -636,7 +636,7 @@ export default function Stats() {
                                     <YAxis tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickFormatter={(val) => `${val}h`} />
                                     <Tooltip
                                         contentStyle={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', borderRadius: '12px' }}
-                                        formatter={(value: number | undefined, name: string) => [name === 'hours' ? `${value || 0}h` : (value || 0), name === 'hours' ? 'Study Time' : 'Reports']}
+                                        formatter={(value: number | undefined, name?: string) => [name === 'hours' ? `${value || 0}h` : (value || 0), name === 'hours' ? 'Study Time' : 'Reports']}
                                     />
                                     <Line type="monotone" dataKey="hours" stroke="var(--primary)" strokeWidth={3} dot={{ r: 4, fill: 'var(--primary)' }} activeDot={{ r: 6 }} name="hours" />
                                     <Line type="monotone" dataKey="count" stroke="var(--success)" strokeWidth={2} strokeDasharray="5 5" name="Reports" />

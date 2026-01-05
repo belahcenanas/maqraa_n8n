@@ -49,7 +49,8 @@ export default function Dashboard() {
     const [newSessionDate, setNewSessionDate] = useState('');
     const [sortBy, setSortBy] = useState<'name' | 'time' | 'duration' | 'status'>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-    const [showOnlyWithRecords, setShowOnlyWithRecords] = useState(false);
+    const [filterOption, setFilterOption] = useState<'all' | 'sent' | 'missing'>('all');
+    const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
 
     const ALLOWED_DAYS = ['Monday', 'Tuesday', 'Thursday', 'Friday'];
 
@@ -96,10 +97,10 @@ export default function Dashboard() {
 
     // --- Logic ---
 
-    // Filter records for current week
-    const now = new Date();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    // Filter records for the week containing the selected date
+    const selectedDateObj = parseISO(selectedDate);
+    const weekStart = startOfWeek(selectedDateObj, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(selectedDateObj, { weekStartsOn: 1 });
 
     const currentWeekRecords = records.filter(r => {
         // Use session_date if available, otherwise fall back to created_at
@@ -109,9 +110,8 @@ export default function Dashboard() {
 
     // Filter records for selected date (for daily view)
     const selectedDateRecordsAll = records.filter(r => {
-        // Only show records where session_date matches (AI's decision)
-        // AND day_sent matches the selected date (to exclude old messages assigned to this session)
-        return r.session_date === selectedDate && r.day_sent === selectedDate;
+        // Only show records where session_date matches
+        return r.session_date === selectedDate;
     });
 
     // Get only the most recent record per student for the selected date
@@ -145,9 +145,11 @@ export default function Dashboard() {
     });
 
     // Sort student activity
-    const filteredActivity = showOnlyWithRecords
+    const filteredActivity = filterOption === 'all'
+        ? dailyStudentActivity
+        : filterOption === 'sent'
         ? dailyStudentActivity.filter(s => s.hasRecord)
-        : dailyStudentActivity;
+        : dailyStudentActivity.filter(s => !s.hasRecord);
 
     const sortedActivity = [...filteredActivity].sort((a, b) => {
         let comparison = 0;
@@ -264,15 +266,11 @@ export default function Dashboard() {
     const studentStats = students.map(student => {
         const studentRecords = currentWeekRecords.filter(r => r.whatsapp_id_student === student.whatsapp_id_student);
         // Derive session day from session_date instead of using session_day field
+        // Only count unique days based on session_date
         const submittedDays = new Set(
             studentRecords
-                .map(r => {
-                    if (r.session_date) {
-                        return format(parseISO(r.session_date), 'EEEE');
-                    }
-                    return r.session_day || r.day_sent;
-                })
-                .filter(Boolean)
+                .filter(r => r.session_date) // Only records with valid session_date
+                .map(r => format(parseISO(r.session_date), 'EEEE'))
         );
         const missingDays = REQUIRED_DAYS.filter(day => !submittedDays.has(day));
         const weekDuration = studentRecords.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
@@ -303,7 +301,11 @@ export default function Dashboard() {
         .slice(0, 7)
         .map(s => ({
             name: s.name?.split(' ')[0] || s.whatsapp_id_student,
-            duration: s.dayDuration
+            duration: s.dayDuration,
+            hours: Math.floor(s.dayDuration / 60),
+            minutes: s.dayDuration % 60,
+            displayText: `${Math.floor(s.dayDuration / 60)}h ${s.dayDuration % 60}m`,
+            color: s.color || '#6366f1'
         }));
 
     if (loading) return <div className="Loading">Loading stats...</div>;
@@ -395,21 +397,47 @@ export default function Dashboard() {
                         <User size={20} color="var(--primary)" />
                         Student Activity - {format(parseISO(selectedDate), 'EEEE, MMM d, yyyy')}
                     </h3>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                        <input
-                            type="checkbox"
-                            checked={showOnlyWithRecords}
-                            onChange={(e) => setShowOnlyWithRecords(e.target.checked)}
-                            style={{ cursor: 'pointer' }}
-                        />
-                        Show only with records ({selectedDateRecords.length})
-                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                        <label style={{ fontWeight: 500, color: 'var(--text-muted)' }}>Show:</label>
+                        <select
+                            value={filterOption}
+                            onChange={(e) => setFilterOption(e.target.value as 'all' | 'sent' | 'missing')}
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid var(--card-border)',
+                                background: 'var(--card-bg)',
+                                color: 'var(--text)',
+                                fontSize: '14px',
+                                cursor: 'pointer',
+                                fontWeight: 500
+                            }}
+                        >
+                            <option value="all">All ({dailyStudentActivity.length})</option>
+                            <option value="sent">Sent ({dailyStudentActivity.filter(s => s.hasRecord).length})</option>
+                            <option value="missing">Missing ({dailyStudentActivity.filter(s => !s.hasRecord).length})</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                             <tr style={{ borderBottom: '1px solid var(--card-border)' }}>
+                                <th style={{ textAlign: 'center', padding: '12px 8px', color: 'var(--text-muted)', fontWeight: 500, width: '40px' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                const missingIds = sortedActivity.filter(s => !s.hasRecord).map(s => s.id);
+                                                setSelectedStudents(new Set(missingIds));
+                                            } else {
+                                                setSelectedStudents(new Set());
+                                            }
+                                        }}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                </th>
                                 <th
                                     onClick={() => handleSort('name')}
                                     style={{
@@ -467,7 +495,7 @@ export default function Dashboard() {
                         <tbody>
                             {sortedActivity.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                    <td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                                         No students found
                                     </td>
                                 </tr>
@@ -492,6 +520,25 @@ export default function Dashboard() {
                                             e.currentTarget.style.background = !student.hasRecord ? 'rgba(239, 68, 68, 0.1)' : 'transparent';
                                         }}
                                     >
+                                        <td style={{ textAlign: 'center', padding: '12px 8px' }}>
+                                            {!student.hasRecord && (
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={selectedStudents.has(student.id)}
+                                                    onChange={(e) => {
+                                                        e.stopPropagation();
+                                                        const newSelected = new Set(selectedStudents);
+                                                        if (e.target.checked) {
+                                                            newSelected.add(student.id);
+                                                        } else {
+                                                            newSelected.delete(student.id);
+                                                        }
+                                                        setSelectedStudents(newSelected);
+                                                    }}
+                                                    style={{ cursor: 'pointer' }}
+                                                />
+                                            )}
+                                        </td>
                                         <td style={{
                                             padding: '12px 8px',
                                             fontWeight: 500,
@@ -553,24 +600,6 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-                <div className="glass-panel stat-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
-                        <Clock size={20} />
-                        <span className="stat-label">Total Time</span>
-                    </div>
-                    <span className="stat-value">{totalDuration}m</span>
-                </div>
-                <div className="glass-panel stat-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--success)' }}>
-                        <CheckCircle size={20} />
-                        <span className="stat-label">Reports</span>
-                    </div>
-                    <span className="stat-value">{currentWeekRecords.length}</span>
-                </div>
-            </div>
-
             {/* Chart */}
             <div className="glass-panel" style={{ padding: '20px', marginBottom: '32px', height: '300px', display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ marginBottom: '20px' }}>Leaderboard - {format(parseISO(selectedDate), 'MMM d')} (Minutes)</h3>
@@ -588,10 +617,15 @@ export default function Dashboard() {
                             <Tooltip
                                 contentStyle={{ background: 'var(--card-bg)', borderColor: 'var(--card-border)', borderRadius: '12px' }}
                                 cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                formatter={(value: number) => {
+                                    const hours = Math.floor(value / 60);
+                                    const mins = value % 60;
+                                    return [`${hours}h ${mins}m`, 'Duration'];
+                                }}
                             />
                             <Bar dataKey="duration" radius={[4, 4, 0, 0]}>
-                                {chartData.map((_entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={index === 0 ? 'var(--primary)' : 'rgba(99, 102, 241, 0.5)'} />
+                                {chartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
                                 ))}
                             </Bar>
                         </BarChart>
@@ -603,7 +637,7 @@ export default function Dashboard() {
             <div>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <AlertCircle color="var(--danger)" size={20} />
-                    Missing Reports (This Week)
+                    Missing Reports ({format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d, yyyy')})
                 </h3>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>

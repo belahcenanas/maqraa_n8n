@@ -12,7 +12,7 @@ export default function StudentList() {
     const [modalType, setModalType] = useState<ModalType>(null);
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
     const [editingGroup, setEditingGroup] = useState<Group | null>(null);
-    const [studentForm, setStudentForm] = useState({ name: '', whatsapp_id_student: '', group_id: '' });
+    const [studentForm, setStudentForm] = useState({ name: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
     const [groupForm, setGroupForm] = useState({ name: '', description: '' });
     const [showGroups, setShowGroups] = useState(false);
 
@@ -41,7 +41,8 @@ export default function StudentList() {
         const dataToSave = {
             name: studentForm.name,
             whatsapp_id_student: studentForm.whatsapp_id_student,
-            group_id: studentForm.group_id ? parseInt(studentForm.group_id) : null
+            group_id: studentForm.group_id ? parseInt(studentForm.group_id) : null,
+            color: studentForm.color || '#6366f1'
         };
 
         if (editingStudent) {
@@ -67,7 +68,7 @@ export default function StudentList() {
 
         setModalType(null);
         setEditingStudent(null);
-        setStudentForm({ name: '', whatsapp_id_student: '', group_id: '' });
+        setStudentForm({ name: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
         fetchData();
     }
 
@@ -143,7 +144,7 @@ export default function StudentList() {
 
     function openAddStudentModal() {
         setEditingStudent(null);
-        setStudentForm({ name: '', whatsapp_id_student: '', group_id: '' });
+        setStudentForm({ name: '', whatsapp_id_student: '', group_id: '', color: '#6366f1' });
         setModalType('student');
     }
 
@@ -152,7 +153,8 @@ export default function StudentList() {
         setStudentForm({
             name: student.name || '',
             whatsapp_id_student: student.whatsapp_id_student || '',
-            group_id: student.group_id?.toString() || ''
+            group_id: student.group_id?.toString() || '',
+            color: student.color || '#6366f1'
         });
         setModalType('student');
     }
@@ -435,6 +437,34 @@ export default function StudentList() {
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>
+                                    Chart Color
+                                </label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <input
+                                        type="color"
+                                        value={studentForm.color}
+                                        onChange={(e) => setStudentForm({ ...studentForm, color: e.target.value })}
+                                        style={{ 
+                                            width: '60px', 
+                                            height: '40px', 
+                                            border: '1px solid var(--card-border)', 
+                                            borderRadius: '8px',
+                                            cursor: 'pointer'
+                                        }}
+                                    />
+                                    <input
+                                        type="text"
+                                        className="input-field"
+                                        value={studentForm.color}
+                                        onChange={(e) => setStudentForm({ ...studentForm, color: e.target.value })}
+                                        placeholder="#6366f1"
+                                        style={{ flex: 1 }}
+                                    />
+                                </div>
                             </div>
 
                             <button

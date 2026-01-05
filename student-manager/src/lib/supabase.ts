@@ -30,6 +30,7 @@ export interface Student {
     whatsapp_id_student: string | null;
     name: string | null;
     group_id: number | null;
+    color: string | null;
 }
 
 export interface Group {

@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, BarChart2, Moon, Sun, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart2, Moon, Sun, FileText, MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export default function Layout() {
@@ -52,6 +52,14 @@ export default function Layout() {
                 >
                     <FileText size={24} />
                     <span>Records</span>
+                </NavLink>
+
+                <NavLink
+                    to="/whatsapp"
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                >
+                    <MessageCircle size={24} />
+                    <span>WhatsApp</span>
                 </NavLink>
 
                 <NavLink
